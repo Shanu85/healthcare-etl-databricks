@@ -1,0 +1,11 @@
+﻿servername,database,datasource,tablename,loadtype,watermark,is_active,targetpath
+tfqk3.h.filess.io,EMRDataHospitalA_changeeven,hos-a,EMRDataHospitalA_changeeven.encounters,Incremental,ModifiedDate,0,hosa
+tfqk3.h.filess.io,EMRDataHospitalA_changeeven,hos-a,EMRDataHospitalA_changeeven.patients,Incremental,ModifiedDate,0,hosa
+tfqk3.h.filess.io,EMRDataHospitalA_changeeven,hos-a,EMRDataHospitalA_changeeven.transactions,Incremental,ModifiedDate,0,hosa
+tfqk3.h.filess.io,EMRDataHospitalA_changeeven,hos-a,EMRDataHospitalA_changeeven.providers,Full,,0,hosa
+tfqk3.h.filess.io,EMRDataHospitalA_changeeven,hos-a,EMRDataHospitalA_changeeven.departments,Full,,0,hosa
+z4dzi.h.filess.io,EMRDataHospitalB_failedreal,hos-b,EMRDataHospitalB_failedreal.encounters,Incremental,ModifiedDate,0,hosb
+z4dzi.h.filess.io,EMRDataHospitalB_failedreal,hos-b,EMRDataHospitalB_failedreal.patients,Incremental,Updated_Date,1,hosb
+z4dzi.h.filess.io,EMRDataHospitalB_failedreal,hos-b,EMRDataHospitalB_failedreal.transactions,Incremental,ModifiedDate,0,hosb
+z4dzi.h.filess.io,EMRDataHospitalB_failedreal,hos-b,EMRDataHospitalB_failedreal.providers,Full,,0,hosb
+z4dzi.h.filess.io,EMRDataHospitalB_failedreal,hos-b,EMRDataHospitalB_failedreal.departments,Full,,0,hosb
