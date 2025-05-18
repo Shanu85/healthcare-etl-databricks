@@ -1,0 +1,49 @@
+{
+	"name": "EMR_end_to_end",
+	"properties": {
+		"activities": [
+			{
+				"name": "src_to_landing",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "EMR_Src_landing_Bronze_Pipeline",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "EMR_Silver_Gold",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "src_to_landing",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "EMR_Silver_to_Gold_Pipeline",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2025-05-18T07:30:56Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

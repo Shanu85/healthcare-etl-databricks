@@ -1,0 +1,755 @@
+{
+	"name": "EMR_Src_landing_Bronze_Pipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "EMR_Config_Lookup",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "generic_adls_flat_file_DS",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": "configs",
+							"filename": "configs.csv",
+							"filepath": "EMR"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEachData",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "SetVariable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('EMR_Config_Lookup').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "PullDataForEachRecord",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "ArchiveData",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(item().loadtype,'Full')",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Fetch_logs",
+										"type": "Lookup",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": true,
+											"secureInput": true
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureDatabricksDeltaLakeSource",
+												"query": {
+													"value": "@concat('select coalesce(cast(max(loaddate) as date),''','1990-01-01',''') as last_fetched_date from emrcatalog.audit.load_logs where',' datasource=''',item().datasource,''' and tablename=''',item().tablename,'''')",
+													"type": "Expression"
+												}
+											},
+											"dataset": {
+												"referenceName": "AzureDatabricksDeltaLake_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"schema_name": "'a'",
+													"table_name": "'a'"
+												}
+											}
+										}
+									},
+									{
+										"name": "CopySQLIncrementalLoad",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "Fetch_logs",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "MySqlSource",
+												"query": {
+													"value": "@concat('select *,''',item().datasource,''' as datasource from ',item().tablename,' where ',item().watermark,' >= ''',activity('Fetch_logs').output.firstRow.last_fetched_date,'''\n')",
+													"type": "Expression"
+												}
+											},
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "generic_SQL_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"server_name": {
+														"value": "@item().servername",
+														"type": "Expression"
+													},
+													"port": "3307",
+													"db_name": {
+														"value": "@item().database",
+														"type": "Expression"
+													},
+													"username": {
+														"value": "@if(equals(item().datasource,'hos-a'),variables('HospitalA_Username'),variables('HospitalB_Username'))",
+														"type": "Expression"
+													},
+													"password": {
+														"value": "@if(equals(item().datasource,'hos-a'),variables('HospitalA_Password'),variables('HospitalB_Password'))",
+														"type": "Expression"
+													},
+													"tablename": {
+														"value": "@item().tablename",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "generic_adls_parquet_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"container": "bronze",
+													"filepath": {
+														"value": "@item().targetpath",
+														"type": "Expression"
+													},
+													"filename": {
+														"value": "@split(item().tablename,'.')[1]",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "insert_logs_incremental_logs",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "CopySQLIncrementalLoad",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureDatabricksDeltaLakeSource",
+												"query": {
+													"value": "@concat('insert into emrcatalog.audit.load_logs(datasource,tablename,numberofrowscopied,watermarkcolumnname,loaddate) values (''',item().datasource,''', ''',item().tablename,''',''',activity('CopySQLIncrementalLoad').output.rowscopied,''',''',item().watermark,''',''',utcNow(),''')')",
+													"type": "Expression"
+												}
+											},
+											"dataset": {
+												"referenceName": "AzureDatabricksDeltaLake_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"schema_name": "'a'",
+													"table_name": "'a'"
+												}
+											},
+											"firstRowOnly": false
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "CopySQLDataFullLoad",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "MySqlSource",
+												"query": {
+													"value": "@concat('select *,''',item().datasource,''' as datasource from ',item().tablename)",
+													"type": "Expression"
+												}
+											},
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "generic_SQL_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"server_name": {
+														"value": "@item().servername",
+														"type": "Expression"
+													},
+													"port": "3307",
+													"db_name": {
+														"value": "@item().database",
+														"type": "Expression"
+													},
+													"username": {
+														"value": "@if(equals(item().datasource,'hos-a'),variables('HospitalA_Username'),variables('HospitalB_Username'))",
+														"type": "Expression"
+													},
+													"password": {
+														"value": "@if(equals(item().datasource,'hos-a'),variables('HospitalA_Password'),variables('HospitalB_Password'))",
+														"type": "Expression"
+													},
+													"tablename": {
+														"value": "@item().tablename",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "generic_adls_parquet_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"container": "bronze",
+													"filepath": {
+														"value": "@item().targetpath",
+														"type": "Expression"
+													},
+													"filename": {
+														"value": "@split(item().tablename,'.')[1]",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "insert_logs_full_load",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "CopySQLDataFullLoad",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureDatabricksDeltaLakeSource",
+												"query": {
+													"value": "@concat('insert into emrcatalog.audit.load_logs(datasource,tablename,numberofrowscopied,watermarkcolumnname,loaddate) values (''',item().datasource,''', ''',item().tablename,''',''',activity('CopySQLDataFullLoad').output.rowscopied,''',''',item().watermark,''',''',utcNow(),''')')",
+													"type": "Expression"
+												}
+											},
+											"dataset": {
+												"referenceName": "AzureDatabricksDeltaLake_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"schema_name": "'a'",
+													"table_name": "'a'"
+												}
+											},
+											"firstRowOnly": false
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "file_exists",
+							"type": "GetMetadata",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "generic_adls_parquet_DS",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": "bronze",
+										"filepath": {
+											"value": "@item().targetpath",
+											"type": "Expression"
+										},
+										"filename": {
+											"value": "@split(item().tablename,'.')[1]",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"exists"
+								],
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "ParquetReadSettings"
+								}
+							}
+						},
+						{
+							"name": "ArchiveData",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "file_exists",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(activity('file_exists').output.exists, true)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "archive data",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "ParquetSource",
+												"storeSettings": {
+													"type": "AzureBlobFSReadSettings",
+													"recursive": true,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "ParquetReadSettings"
+												}
+											},
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "generic_adls_parquet_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"container": "bronze",
+													"filepath": {
+														"value": "@item().targetpath",
+														"type": "Expression"
+													},
+													"filename": {
+														"value": "@split(item().tablename,'.')[1]",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "generic_adls_parquet_DS",
+												"type": "DatasetReference",
+												"parameters": {
+													"container": "bronze",
+													"filepath": {
+														"value": "@concat(item().targetpath,'/archive/',formatDateTime(utcNow(),'yyyy'),'/',formatDateTime(utcNow(),'%M'),'/',formatDateTime(utcNow(),'%d'))",
+														"type": "Expression"
+													},
+													"filename": {
+														"value": "@split(item().tablename,'.')[1]",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "SetVariable",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "EMR_Config_Lookup",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greaterOrEquals(activity('EMR_Config_Lookup').output.count,1)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "SetDBPassword1",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "AKV_Password1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "HospitalA_Password",
+								"value": {
+									"value": "@activity('AKV_Password1').output.value",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "SetDBUsername1",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "AKV_Username1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "HospitalA_Username",
+								"value": {
+									"value": "@activity('AKV_Username1').output.value",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "AKV_Password1",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": "https://keyvaultazureshanu.vault.azure.net/secrets/hospital1Password/113874feba734e57b2ea0a79ccea6179?api-version=7.0",
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://vault.azure.net/"
+								}
+							}
+						},
+						{
+							"name": "AKV_Username1",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": "https://keyvaultazureshanu.vault.azure.net/secrets/hospital1Username/30b51682ddb14a3da21ab3bba3d80551?api-version=7.0",
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://vault.azure.net/"
+								}
+							}
+						},
+						{
+							"name": "SetDBPassword2",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "AKV_Password2",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "HospitalB_Password",
+								"value": {
+									"value": "@activity('AKV_Password2').output.value",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "SetDBUsername2",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "AKV_Username2",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "HospitalB_Username",
+								"value": {
+									"value": "@activity('AKV_Username2').output.value",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "AKV_Password2",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": "https://keyvaultazureshanu.vault.azure.net/secrets/hospital2Password/c4c25fb61cca446185501e379c903e8a?api-version=7.0",
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://vault.azure.net/"
+								}
+							}
+						},
+						{
+							"name": "AKV_Username2",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": "https://keyvaultazureshanu.vault.azure.net/secrets/hospital2Username/aa28e7801ec646b8949f155afa0e1b92?api-version=7.0",
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://vault.azure.net/"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "claims_cpt_icd_npi_data_to_bronze",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "SetVariable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "claims_cpt_icd_npi_data_to_bronze_pipeline",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			}
+		],
+		"variables": {
+			"HospitalA_Password": {
+				"type": "String"
+			},
+			"HospitalA_Username": {
+				"type": "String"
+			},
+			"HospitalB_Password": {
+				"type": "String"
+			},
+			"HospitalB_Username": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-05-18T07:30:55Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

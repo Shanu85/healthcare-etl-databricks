@@ -1,0 +1,35 @@
+{
+	"name": "MySql_DB_LS",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"server_name": {
+				"type": "string"
+			},
+			"port": {
+				"type": "string"
+			},
+			"db_name": {
+				"type": "string"
+			},
+			"username": {
+				"type": "string"
+			},
+			"password": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "MySql",
+		"typeProperties": {
+			"server": "@{linkedService().server_name}",
+			"port": "@{linkedService().port}",
+			"database": "@{linkedService().db_name}",
+			"username": "@{linkedService().username}",
+			"sslMode": 1,
+			"useSystemTrustStore": 0,
+			"password": "@{linkedService().password}",
+			"driverVersion": "v2"
+		}
+	}
+}

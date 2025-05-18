@@ -1,0 +1,9 @@
+{
+	"name": "ECommDFShanu",
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "c732b503-31cb-4826-b9d6-07d49f7e7a32",
+		"tenantId": "45c6bd35-9e79-4a1a-ae86-78286b1711e7"
+	}
+}
