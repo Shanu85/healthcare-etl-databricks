@@ -53,6 +53,15 @@ This project implements a modern healthcare data engineering pipeline using **Az
 
 ## 🧪 Pipeline Workflow
 
+### 🔹 High-Level ADF Pipeline Flow
+<img width="400" alt="SCR-20250520-lfug" src="https://github.com/user-attachments/assets/b3328f8c-125d-48e4-bc4a-99d89d6bb1b1" />
+
+### 🔹 Config-Driven File Processing Logic
+<img width="1000" alt="SCR-20250520-lfug" src="https://github.com/user-attachments/assets/bffe776d-8cee-4ce5-86f6-561cad1d748a" />
+
+### 🔹 Databricks Silver to Gold Notebook Flow
+<img width="400" alt="SCR-20250520-lfug" src="https://github.com/user-attachments/assets/796650b9-0baf-4445-aaba-3f4815948396" />
+
 1. **ADF Pipeline** (Parameter-driven):
    - Reads data from SQL DB & APIs
    - Uploads claims & CPT code files
@@ -133,11 +142,6 @@ healthcare-etl-databricks/
 
 6. Access processed data via Unity Catalog or downstream reporting tools
 
-## 👤 Author
-
-**Shanu Kumar**  
-📧 [LinkedIn](https://www.linkedin.com/in/shanu-kumar/)  
-💼 Data Engineering & Azure Solutions
 
 ## 📄 License
 
