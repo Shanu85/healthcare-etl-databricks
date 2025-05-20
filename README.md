@@ -21,6 +21,11 @@ This project implements a modern healthcare data engineering pipeline using **Az
   - Claims data uploaded by the Claims Team (manually)
   - CPT Codes available in the Landing folder
 
+### ERD
+<img width="700" alt="SCR-20250520-lfug" src="https://github.com/user-attachments/assets/a24b6e24-7050-4947-a38c-a648ba9e70de" />
+
+
+
 ## 🏗 Architecture Overview
 
 ### 🔁 Architecture Pattern: **Medallion Architecture (Bronze → Silver → Gold)**
