@@ -11,6 +11,7 @@ This project implements a modern healthcare data engineering pipeline using **Az
   - `Patients`
   - `Departments`
   - `Encounters`
+  - Used https://dash.filess.io/ for SQL Data hosting
 
 - **External APIs** for:
   - **ICD Codes**
